@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PyQt5.QtCore import QSignalBlocker, QThread, pyqtSignal
 from PyQt5.QtWidgets import (
-    QApplication, QCheckBox, QDoubleSpinBox, QFileDialog, QFormLayout,
+    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout,
     QGroupBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
     QMainWindow, QMessageBox, QPushButton, QScrollArea, QTabWidget,
     QVBoxLayout, QWidget,
@@ -17,7 +17,10 @@ from PyQt5.QtWidgets import (
 
 from .bundle import load_head, save_head
 from .document import Part
-from .geometry import Pose, direction_pose, read_stl
+from .geometry import (
+    PLANE_AXIS_EPSILON, Pose, direction_pose, plane_from_triangle,
+    point_at_surface_distance, read_stl, surface_axis_distance,
+)
 from .starter import new_starter_document
 from .viewport import Viewport
 
@@ -67,6 +70,7 @@ class PoseFields(QGroupBox):
     def __init__(self, title):
         super().__init__(title)
         layout = QFormLayout(self)
+        layout.setRowWrapPolicy(QFormLayout.WrapLongRows)
         self.position = VectorFields()
         self.rotation = VectorFields(("Roll", "Pitch", "Yaw"), -360, 360)
         layout.addRow("Position (mm)", self.position)
@@ -108,6 +112,10 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.document = new_starter_document()
+        self.reference_part = None
+        self.reference_point = None
+        self.reference_normal = None
+        self.reference_cell = -1
         self.dirty = False
         self.worker = None
         self.resize(1200, 800)
@@ -163,30 +171,63 @@ class MainWindow(QMainWindow):
         build_layout.addStretch()
         tabs.addTab(build, "1 · Build mount")
 
-        sensor = QWidget()
-        sensor_layout = QVBoxLayout(sensor)
-        instruction = QLabel("Pick the sensing point on your mount, or enter a virtual point.\n"
-                             "The red arrow must point toward the surface being inspected.")
-        instruction.setWordWrap(True)
-        sensor_layout.addWidget(instruction)
-        self.pick_button = QPushButton("Pick tip on mount")
+        measurement = QGroupBox("Position tip from surfaces")
+        measurement_layout = QVBoxLayout(measurement)
+        help_text = QLabel("Click the initial tip position, then choose a reference face.\n"
+                           "Edit its distance to the tip along X, Y or Z.\n"
+                           "Repeat with another face to refine the placement.")
+        help_text.setWordWrap(True)
+        measurement_layout.addWidget(help_text)
+        self.pick_button = QPushButton("1 · Pick sensor tip on mount")
         self.pick_button.setCheckable(True)
         self.pick_button.toggled.connect(self._picking_changed)
-        sensor_layout.addWidget(self.pick_button)
-        self.use_normal = QCheckBox("Use picked face for sensing direction")
+        measurement_layout.addWidget(self.pick_button)
+        self.use_normal = QCheckBox("Use clicked tip face for sensing direction")
         self.use_normal.setChecked(True)
-        sensor_layout.addWidget(self.use_normal)
-        origin = QPushButton("Set tip at mount origin")
-        origin.clicked.connect(self._tip_at_origin)
-        sensor_layout.addWidget(origin)
-        self.tip_pose = PoseFields("Sensor tip · relative to mount")
-        self.tip_pose.changed.connect(self._move_tip)
-        sensor_layout.addWidget(self.tip_pose)
-        flip = QPushButton("Flip sensing direction")
-        flip.clicked.connect(self._flip_tip)
-        sensor_layout.addWidget(flip)
-        sensor_layout.addStretch()
-        tabs.addTab(sensor, "2 · Sensor tip")
+        measurement_layout.addWidget(self.use_normal)
+        reference_row = QHBoxLayout()
+        self.reference_button = QPushButton("2 · Pick reference surface")
+        self.reference_button.setCheckable(True)
+        self.reference_button.toggled.connect(
+            lambda enabled: self._set_pick_mode("surface" if enabled else None))
+        reference_row.addWidget(self.reference_button)
+        clear = QPushButton("Clear reference")
+        clear.clicked.connect(self._clear_measurement)
+        reference_row.addWidget(clear)
+        measurement_layout.addLayout(reference_row)
+        self.reference_label = QLabel()
+        self.reference_label.setWordWrap(True)
+        measurement_layout.addWidget(self.reference_label)
+        distance_label = QLabel("Signed distance from surface plane to tip (mm)")
+        distance_label.setWordWrap(True)
+        measurement_layout.addWidget(distance_label)
+        distance_row = QHBoxLayout()
+        self.measure_axis = QComboBox()
+        self.measure_axis.addItems(("X (red)", "Y (green)", "Z (blue)"))
+        self.measure_axis.currentIndexChanged.connect(self._show_measurement)
+        distance_row.addWidget(self.measure_axis)
+        self.measure_distance = QDoubleSpinBox()
+        self.measure_distance.setRange(-2000, 2000)
+        self.measure_distance.setDecimals(4)
+        self.measure_distance.setSingleStep(1)
+        self.measure_distance.setKeyboardTracking(False)
+        self.measure_distance.setSuffix(" mm")
+        self.measure_distance.valueChanged.connect(self._edit_surface_distance)
+        distance_row.addWidget(self.measure_distance)
+        measurement_layout.addLayout(distance_row)
+        help_text = QLabel("Editing moves the tip immediately along only the chosen axis.\n"
+                           "Positive follows the colored arrow; negative goes the other way.\n"
+                           "Use flat faces for precise physical measurements.")
+        help_text.setWordWrap(True)
+        measurement_layout.addWidget(help_text)
+        measure_page = QWidget()
+        measure_layout = QVBoxLayout(measure_page)
+        measure_layout.addWidget(measurement)
+        direction_note = QLabel("The red arrow shows the sensing direction toward the inspected surface.")
+        direction_note.setWordWrap(True)
+        measure_layout.addWidget(direction_note)
+        measure_layout.addStretch()
+        tabs.addTab(measure_page, "2 · Sensor tip")
 
         self.show_lower_jaw = QCheckBox("Show lower-jaw extension")
         panel.addWidget(self.show_lower_jaw)
@@ -202,9 +243,11 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setWidget(controls)
         scroll.setMinimumWidth(420)
-        scroll.setMaximumWidth(480)
+        scroll.setMaximumWidth(500)
         self.viewport = Viewport()
         self.viewport.tip_picked.connect(self._tip_picked)
+        self.viewport.surface_picked.connect(self._surface_picked)
+        self.viewport.pick_failed.connect(self.statusBar().showMessage)
         self.show_lower_jaw.toggled.connect(self.viewport.set_lower_jaw_visible)
         self.show_holes.toggled.connect(self.viewport.set_holes_visible)
         central = QWidget()
@@ -228,12 +271,13 @@ class MainWindow(QMainWindow):
             self.part_list.setCurrentRow(min(max(index, 0), len(self.document.parts) - 1))
         self.name.setText(self.document.name)
         self.mount_pose.set_pose(self.document.placement)
-        self.tip_pose.setEnabled(self.document.tip is not None)
-        self.tip_pose.set_pose(self.document.tip or Pose())
         self._select_part()
 
     def _select_part(self, index=None):
         part = self._selected_part()
+        if self.reference_part is not None and not any(
+                item is self.reference_part for item in self.document.parts):
+            self._clear_measurement()
         self.part_pose.setEnabled(part is not None)
         self.dimensions.setEnabled(part is not None and part.kind == "box")
         if part is not None:
@@ -241,11 +285,13 @@ class MainWindow(QMainWindow):
             size = part.dimensions if part.kind == "box" else np.ptp(part.mesh.reshape(-1, 3), axis=0)
             self.dimensions.set_values(np.array(size) * 1000)
         self.viewport.set_document(self.document, self.part_list.currentRow())
+        self._show_measurement()
 
     def _changed(self):
         self.dirty = True
         self.setWindowTitle("Spot mount creator · unsaved changes")
         self.viewport.set_document(self.document, self.part_list.currentRow())
+        self._show_measurement()
 
     def _rename(self, name):
         self.document.name = name
@@ -274,12 +320,14 @@ class MainWindow(QMainWindow):
     def _resize_box(self):
         part = self._selected_part()
         if part is not None and part.kind == "box":
+            self._clear_measurement()
             part.dimensions = tuple(np.array(self.dimensions.values()) / 1000)
             self._changed()
 
     def _move_part(self):
         part = self._selected_part()
         if part is not None:
+            self._clear_measurement()
             part.pose = self.part_pose.pose()
             self._changed()
 
@@ -288,18 +336,98 @@ class MainWindow(QMainWindow):
         self._changed()
 
     def _picking_changed(self, enabled):
-        self.viewport.picking = enabled
-        self.statusBar().showMessage("Click a mount surface to set the tip." if enabled else "")
+        self._set_pick_mode("tip" if enabled else None)
+
+    def _set_pick_mode(self, mode):
+        for button, name in ((self.pick_button, "tip"), (self.reference_button, "surface")):
+            with QSignalBlocker(button):
+                button.setChecked(mode == name)
+        self.viewport.set_pick_mode(mode)
+        messages = {
+            "tip": "Click a mount surface to place the sensor tip.",
+            "surface": "Click a reference face on any mount part.",
+        }
+        self.statusBar().showMessage(messages.get(mode, ""))
+
+    def _clear_measurement(self):
+        self.reference_part = None
+        self.reference_point = None
+        self.reference_normal = None
+        self.reference_cell = -1
+        self._set_pick_mode(None)
+        self._show_measurement()
+
+    def _surface_picked(self, part_index, cell_id, world_triangle):
+        if self.document.tip is None:
+            return
+        part = self.document.parts[part_index]
+        frame = self.document.placement.compose(part.pose)
+        try:
+            point, normal = plane_from_triangle(frame.inverse().apply(world_triangle))
+        except ValueError as error:
+            self.statusBar().showMessage(str(error))
+            return
+        self.reference_part = part
+        self.reference_point = point
+        self.reference_normal = normal
+        self.reference_cell = cell_id
+        with QSignalBlocker(self.measure_axis):
+            self.measure_axis.setCurrentIndex(int(np.argmax(np.abs(normal))))
+        self._set_pick_mode(None)
+        self._show_measurement()
+
+    def _show_measurement(self):
+        has_tip = self.document.tip is not None
+        self.reference_button.setEnabled(has_tip and bool(self.document.parts))
+        enabled = has_tip and self.reference_part is not None
+        self.measure_axis.setEnabled(enabled)
+        self.measure_distance.setEnabled(enabled)
+        if not enabled:
+            self.reference_label.setText("Pick a reference surface." if has_tip else "Pick the sensor tip first.")
+            with QSignalBlocker(self.measure_distance):
+                self.measure_distance.setValue(0)
+            self.viewport.set_surface_measurement()
+            return
+        for axis, component in enumerate(self.reference_normal):
+            self.measure_axis.model().item(axis).setEnabled(bool(abs(component) > PLANE_AXIS_EPSILON))
+        axis = self.measure_axis.currentIndex()
+        tip = self.reference_part.pose.inverse().apply(self.document.tip.translation)
+        try:
+            distance = surface_axis_distance(self.reference_point, self.reference_normal, tip, axis)
+        except ValueError as error:
+            self.measure_distance.setEnabled(False)
+            self.reference_label.setText(str(error))
+            self.viewport.set_surface_measurement()
+            return
+        self.reference_label.setText(f"Reference: {self.reference_part.name}\n"
+                                    "X/Y/Z follow this part's axes. Yellow marks the surface plane.")
+        millimetres = distance * 1000
+        with QSignalBlocker(self.measure_distance):
+            self.measure_distance.setRange(min(-2000, millimetres), max(2000, millimetres))
+            self.measure_distance.setValue(millimetres)
+        part_index = next(index for index, part in enumerate(self.document.parts)
+                          if part is self.reference_part)
+        frame = self.document.placement.compose(self.reference_part.pose)
+        self.viewport.set_surface_measurement(part_index, self.reference_cell, frame,
+                                              self.reference_point, self.reference_normal, tip, axis)
+
+    def _edit_surface_distance(self, millimetres):
+        if self.reference_part is None or self.document.tip is None:
+            return
+        tip = self.reference_part.pose.inverse().apply(self.document.tip.translation)
+        try:
+            point = point_at_surface_distance(self.reference_point, self.reference_normal,
+                                              tip, self.measure_axis.currentIndex(), millimetres / 1000)
+        except ValueError as error:
+            self.statusBar().showMessage(str(error))
+            return
+        position = self.reference_part.pose.apply(point)
+        self._set_tip(Pose(tuple(position), self.document.tip.quaternion))
 
     def _set_tip(self, pose):
         self.document.tip = pose
-        self.tip_pose.setEnabled(True)
-        self.tip_pose.set_pose(pose)
-        self.pick_button.setChecked(False)
+        self._set_pick_mode(None)
         self._changed()
-
-    def _tip_at_origin(self):
-        self._set_tip(Pose())
 
     def _tip_picked(self, point, normal):
         inverse = self.document.placement.inverse()
@@ -314,15 +442,6 @@ class MainWindow(QMainWindow):
             previous = self.document.tip or Pose()
             self._set_tip(Pose(tuple(position), previous.quaternion))
 
-    def _move_tip(self):
-        if self.document.tip is not None:
-            self.document.tip = self.tip_pose.pose()
-            self._changed()
-
-    def _flip_tip(self):
-        if self.document.tip is not None:
-            self._set_tip(self.document.tip.compose(Pose.from_rpy((0, 0, 0), (0, 0, np.pi))))
-
     def _discard_changes(self):
         if not self.dirty:
             return True
@@ -335,6 +454,7 @@ class MainWindow(QMainWindow):
             self._replace_document(new_starter_document())
 
     def _replace_document(self, document):
+        self._clear_measurement()
         self.document = document
         self.dirty = False
         self.pick_button.setChecked(False)

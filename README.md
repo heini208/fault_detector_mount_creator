@@ -33,9 +33,10 @@ checks use Python 3.10, NumPy 1.21, PyQt5 5.15, and VTK 9.1.
    or inches; check the displayed part size before continuing.
 2. Set box dimensions and each part's position and rotation. **Whole mount**
    places the complete assembly relative to Spot's hand reference.
-3. Open **Sensor tip**. Pick a point on the mount or set a virtual point at the
-   mount origin and enter its measured coordinates. Check the red sensing arrow,
-   flip it if needed, and adjust the rotation. Local +X faces the inspected surface.
+3. Open **Sensor tip**, click the initial tip position, then adjust its distance
+   from reference surfaces (see below). Check that the red sensing arrow faces
+   the inspected surface. **Use clicked tip face for sensing direction** aligns
+   it with the picked face; turn this off to preserve the existing direction.
 4. **Export head** writes a `.sensorhead` file. **Open head** restores its parts,
    dimensions, placement, and tip for further editing.
 
@@ -50,6 +51,47 @@ Moving an individual part changes only that part, so check the tip again when
 changing the assembly. Length controls use millimetres; file coordinates use
 metres. Rotations in the UI use roll/pitch/yaw degrees; exported poses use xyzw
 quaternions.
+
+## Position a tip from physical measurements
+
+1. In **Sensor tip**, choose **Pick sensor tip on mount** and click its initial
+   position on a mount surface. This places the tip immediately.
+2. Choose **Pick reference surface** and click the flat face you measured from
+   on the real mount. Any authored part can be selected directly. The chosen
+   plane is highlighted yellow; selecting it does not move the tip.
+3. Choose **X**, **Y** or **Z** and read the signed distance in millimetres. The
+   editor initially chooses the axis most perpendicular to that face. Axes
+   parallel to the plane are disabled because they cannot intersect it.
+4. Type the measured distance and press Enter or leave the field. The tip moves
+   immediately along only that axis, keeping its other two coordinates and
+   sensing direction. Positive distances follow the colored arrow; negative
+   distances go the other way. For example, on a top face perpendicular to Z,
+   entering +5 places the tip 5 mm above that plane along +Z.
+5. Pick another reference surface and repeat until the placement matches your
+   measurements. Check the red sensing arrow before export.
+
+X/Y/Z belong to the reference part's original geometry, including its current
+rotation, not the camera view or Spot's hand. On the starter STL, X runs forward,
+Y upward and Z across the mount toward negative hand Y. Rotating the whole mount
+carries the ruler and tip together without changing the measured distance.
+
+The ruler follows the selected axis from the surface plane to the tip. For an
+angled face, this is an axis distance rather than the perpendicular distance.
+The plane extends beyond the visible face; the intersection may lie outside
+its edges. On a flat face the result is independent of where you click. On a
+curved STL surface, the clicked triangle supplies a local plane, so use a flat
+face as the reference for precise physical measurements. Accuracy still depends
+on the source mesh and your physical measurements.
+
+Each edit operates on the current tip position; previous distances are not
+locked as constraints. On angled faces, adjusting another axis can change a
+previous measurement, so recheck it as needed. Picking a new tip position refreshes
+the current readout. Changing the reference or measurement axis is read-only.
+
+The measurement guides never enter exported collision geometry. The reference
+is temporary: moving/resizing a part, removing the reference part, or opening or
+creating a head clears it. Export saves the resulting tip pose. After reopening,
+pick a reference surface again to recheck its dimensions.
 
 ## Starter mount
 
@@ -92,7 +134,8 @@ The exact physically removed jaw components have not been verified. Files carry
 approved runtime attachment profile. The eventual robot importer must require a
 verified compatible template before activation.
 
-This milestone provides numeric placement, STL import, boxes, tip picking, and
+This milestone provides numeric placement, STL import, boxes, surface-based
+measurement guides, immediate tip distance adjustment, direct tip picking, and
 export/reopen. Cylinders, drag handles, guided landmark alignment, undo/redo, and
 collision-envelope padding remain future work. Export uses the nominal mesh with
 zero extra clearance. Imported meshes must be closed, consistently wound and
@@ -143,6 +186,7 @@ python3 -m unittest discover -s tests -v
 ```
 
 Tests cover pose conventions, unit conversion, mesh validation, archive limits,
-failed-write preservation, starter screw-axis alignment, and export/reopen precision. UI tests use offscreen Qt
+failed-write preservation, starter screw-axis alignment, measured offsets in
+rotated part frames, exact reference-plane geometry, and export/reopen precision. UI tests use offscreen Qt
 with a generic VTK render window, without rendering or connecting to a robot.
 They check controls and scene data, not the desktop OpenGL rendering path.

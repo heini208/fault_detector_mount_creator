@@ -10,6 +10,7 @@ import numpy as np
 
 MAX_TRIANGLES = 200_000
 MAX_STL_BYTES = 32 * 1024 * 1024
+PLANE_AXIS_EPSILON = 1e-6
 STL_TRIANGLE_DTYPE = np.dtype([
     ("normal", "<f4", (3,)), ("vertices", "<f4", (3, 3)), ("attribute", "<u2"),
 ])
@@ -149,6 +150,55 @@ def direction_pose(position, direction, up=(0, 0, 1)) -> Pose:
     matrix[:3, :3] = np.column_stack((x_axis, y_axis, np.cross(x_axis, y_axis)))
     matrix[:3, 3] = position
     return Pose.from_matrix(matrix)
+
+
+def plane_from_triangle(triangle):
+    """Return a vertex and unit normal from an exact mesh triangle."""
+    triangle = np.asarray(triangle, dtype=float)
+    if triangle.shape != (3, 3) or not np.isfinite(triangle).all():
+        raise ValueError("A surface triangle must contain three finite points.")
+    with np.errstate(over="ignore", invalid="ignore"):
+        normal = np.cross(triangle[1] - triangle[0], triangle[2] - triangle[0])
+        length = np.linalg.norm(normal)
+    if not np.isfinite(length) or length == 0:
+        raise ValueError("A surface triangle must be nondegenerate.")
+    return triangle[0].copy(), normal / length
+
+
+def surface_axis_distance(point, normal, tip, axis):
+    """Signed plane-to-tip distance along one axis, all in the same frame."""
+    point, normal, tip = (np.asarray(value, dtype=float) for value in (point, normal, tip))
+    if any(value.shape != (3,) or not np.isfinite(value).all()
+           for value in (point, normal, tip)):
+        raise ValueError("Surface and tip must contain finite three-dimensional vectors.")
+    if isinstance(axis, bool) or not isinstance(axis, (int, np.integer)) or not 0 <= axis < 3:
+        raise ValueError("Measurement axis must be X, Y or Z (0, 1 or 2).")
+    with np.errstate(over="ignore", invalid="ignore"):
+        length = np.linalg.norm(normal)
+    if not np.isfinite(length) or length == 0:
+        raise ValueError("Surface normal must be nonzero and finite.")
+    normal = normal / length
+    if abs(normal[axis]) <= PLANE_AXIS_EPSILON:
+        raise ValueError("The selected axis is parallel to the surface plane.")
+    with np.errstate(over="ignore", invalid="ignore"):
+        distance = np.dot(normal, tip - point) / normal[axis]
+    if not np.isfinite(distance):
+        raise ValueError("Surface distance exceeds the supported numeric range.")
+    return float(distance)
+
+
+def point_at_surface_distance(point, normal, tip, axis, distance):
+    """Move only the selected tip coordinate to the requested signed distance."""
+    distance = float(distance)
+    if not np.isfinite(distance):
+        raise ValueError("Surface distance must be finite.")
+    current = surface_axis_distance(point, normal, tip, axis)
+    result = np.asarray(tip, dtype=float).copy()
+    with np.errstate(over="ignore", invalid="ignore"):
+        result[axis] += distance - current
+    if not np.isfinite(result).all():
+        raise ValueError("Tip position exceeds the supported numeric range.")
+    return result
 
 
 def box_mesh(dimensions: tuple[float, float, float]) -> np.ndarray:

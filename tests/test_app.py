@@ -57,15 +57,13 @@ class EditorTests(unittest.TestCase):
         self.window._tip_picked(point, normal)
         np.testing.assert_allclose(self.window.document.tip.translation, (0.01, 0.02, 0.03))
         np.testing.assert_allclose(self.window.document.hand_to_probe().matrix()[:3, 0], normal)
-        self.window._flip_tip()
-        np.testing.assert_allclose(self.window.document.hand_to_probe().matrix()[:3, 0], -normal)
         np.testing.assert_array_equal(self.window.document.collision_mesh(), before)
 
     def test_part_edits_and_whole_mount_have_separate_effects(self):
         self.window._replace_document(Document())
         self.window._add_box()
         self.window._add_box()
-        self.window._tip_at_origin()
+        self.window._set_tip(Pose())
         self.window.part_pose.position.fields[0].setValue(25)
         self.assertEqual(self.window.document.parts[0].pose.translation, (0, 0, 0))
         self.assertEqual(self.window.document.parts[1].pose.translation, (0.025, 0, 0))
@@ -81,7 +79,7 @@ class EditorTests(unittest.TestCase):
     def test_background_export_then_reopen(self):
         self.window._replace_document(Document())
         self.window._add_box()
-        self.window._tip_at_origin()
+        self.window._set_tip(Pose())
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "example.sensorhead"
             self.window._run_task("Exporting", lambda: save_head(path, self.window.document),
@@ -106,7 +104,7 @@ class EditorTests(unittest.TestCase):
 
     def test_reference_toggles_do_not_change_export_or_tip_picking(self):
         self.window._add_box()
-        self.window._tip_at_origin()
+        self.window._set_tip(Pose())
         viewport = self.window.viewport
         self.assertEqual(len(viewport.hole_markers), 4)
         self.assertTrue(all(not actor.GetVisibility() for actor in viewport.reference_actors["lower_jaw"]))
@@ -149,7 +147,7 @@ class EditorTests(unittest.TestCase):
         self.assertTrue(self.window.part_pose.isEnabled())
         self.window.part_pose.position.fields[0].setValue(25)
         self.assertEqual(original.parts[0].pose.translation, (0.025, 0, 0))
-        self.window._tip_at_origin()
+        self.window._set_tip(Pose())
         self.window._remove_part()
         self.assertEqual(self.window.document.parts, [])
         self.assertEqual(len(self.window.viewport.parts), 0)
@@ -162,7 +160,7 @@ class EditorTests(unittest.TestCase):
         np.testing.assert_array_equal(restored.parts[0].mesh, mesh)
         self.assertEqual(restored.placement, original.placement)
         self.assertIsNone(restored.tip)
-        self.assertFalse(self.window.tip_pose.isEnabled())
+        self.assertFalse(self.window.reference_button.isEnabled())
         self.assertFalse(self.window.dirty)
         with patch.object(QMessageBox, "information") as information:
             self.window._export()
