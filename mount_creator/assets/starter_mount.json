@@ -1,0 +1,66 @@
+{
+  "name": "Starter sensor mount",
+  "mesh": "starter_mount.stl",
+  "source_file": "shapr3d_export_2026-10-11_17h07m.stl",
+  "source_sha256": "6c5eb185f4c6fc82b9ed6b783061994665fa2be703d2d3fb9730e5bbfefebdb6",
+  "source_units": "mm",
+  "scale_to_m": 0.001,
+  "hand_to_geometry": {
+    "translation": [
+      -0.11208867798506154,
+      0.041992,
+      -0.06489429454966204
+    ],
+    "quaternion": [
+      0.7070694416674207,
+      -0.007266681506848822,
+      0.007266681506848822,
+      0.7070694416674207
+    ]
+  },
+  "alignment_method": "Rigid least-squares alignment of four bore axes to mount_hole_candidates.json. Source X points forward, source Y points up, and source Z points toward negative hand Y; the mount is centered on the reference side-plane midpoint. Geometry is not rescaled beyond millimetres to metres.",
+  "physical_calibration_verified": false,
+  "source_holes": [
+    {
+      "center_xy_mm": [
+        7.5,
+        30.5
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "radius_mm": 2.1
+    },
+    {
+      "center_xy_mm": [
+        46.5,
+        23.0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "radius_mm": 2.1
+    }
+  ],
+  "source_side_plates_z_mm": [
+    [
+      0,
+      3.5
+    ],
+    [
+      81.5,
+      85
+    ]
+  ],
+  "source_pitch_mm": 39.714606884621176,
+  "reference_pitch_mm": 39.628896275865486,
+  "axis_fit_residual_max_mm": 0.04579566521088639,
+  "source_inner_width_mm": 78.0,
+  "source_outer_width_mm": 85.0,
+  "reference_inner_width_mm": 84.0,
+  "fit_note": "Bore axes agree within 0.046 mm in the model. This is a numerical fit, not a claim of physical accuracy. The supplied STL has a 78 mm inner opening versus 84 mm between accessory-derived reference planes; retained lower-jaw geometry in the approximate preview may overlap its side plates. Verify on the physical gripper."
+}

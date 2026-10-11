@@ -1,0 +1,138 @@
+{
+  "frame": "hand",
+  "units": "m",
+  "verified": false,
+  "source_mesh": "lower_jaw_mount_source.obj",
+  "provenance": "Least-squares circles fitted to two opening contours on each inner side plane of the lower-jaw RealSense accessory mesh. Xacro accessory-to-wrist transform: translation [0.09, 0, -0.034] m, rotation Rz(pi/2). Hand origin is wrist +X 0.19557 m. Ring positions remain at actual accessory inner planes; they were not projected onto an invented stock surface.",
+  "stock_mesh_crosscheck": "Candidate axes fall near irregular small recessed side features in the detailed arm_link_wr1 visual mesh. That mesh does not provide clean enough circular contours to independently verify these hole centers or radii. These are accessory-derived visual hints, not verified factory screw coordinates or calibration datums. Numeric fit residual is not physical accuracy.",
+  "holes": [
+    {
+      "id": "negative_y_proximal",
+      "label": "Candidate proximal mounting hole, negative y",
+      "center_hand_m": [
+        -0.10517748159582598,
+        -0.042508,
+        -0.03426955839518841
+      ],
+      "axis_hand": [
+        0,
+        -1,
+        0
+      ],
+      "radius_m": 0.0022112092095221726,
+      "center_accessory_m": [
+        -0.042508,
+        -0.0003925184041740192,
+        -0.0002695583951884043
+      ],
+      "source_vertex_indices_one_based": [
+        69,
+        77,
+        78,
+        79,
+        81,
+        82,
+        85,
+        86
+      ],
+      "fit_residual_max_m": 4.6098052998269894e-05,
+      "fit_residual_rms_m": 2.4418214818241716e-05
+    },
+    {
+      "id": "negative_y_distal",
+      "label": "Candidate distal mounting hole, negative y",
+      "center_hand_m": [
+        -0.06611309392211176,
+        -0.042508,
+        -0.04092502333112053
+      ],
+      "axis_hand": [
+        0,
+        -1,
+        0
+      ],
+      "radius_m": 0.0022290870278511986,
+      "center_accessory_m": [
+        -0.042508,
+        -0.039456906077888244,
+        -0.006925023331120527
+      ],
+      "source_vertex_indices_one_based": [
+        68,
+        70,
+        72,
+        73,
+        74,
+        80,
+        89
+      ],
+      "fit_residual_max_m": 3.9861940887741826e-05,
+      "fit_residual_rms_m": 2.4988985226271824e-05
+    },
+    {
+      "id": "positive_y_proximal",
+      "label": "Candidate proximal mounting hole, positive y",
+      "center_hand_m": [
+        -0.10517224321736753,
+        0.041492,
+        -0.03423808509664037
+      ],
+      "axis_hand": [
+        0,
+        1,
+        0
+      ],
+      "radius_m": 0.002207683469434894,
+      "center_accessory_m": [
+        0.041492,
+        -0.0003977567826324704,
+        -0.0002380850966403703
+      ],
+      "source_vertex_indices_one_based": [
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136
+      ],
+      "fit_residual_max_m": 4.010964122799386e-05,
+      "fit_residual_rms_m": 2.4661856231859638e-05
+    },
+    {
+      "id": "positive_y_distal",
+      "label": "Candidate distal mounting hole, positive y",
+      "center_hand_m": [
+        -0.06611378954864566,
+        0.041492,
+        -0.04094747484595576
+      ],
+      "axis_hand": [
+        0,
+        1,
+        0
+      ],
+      "radius_m": 0.0022079294784739284,
+      "center_accessory_m": [
+        0.041492,
+        -0.03945621045135433,
+        -0.006947474845955761
+      ],
+      "source_vertex_indices_one_based": [
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157
+      ],
+      "fit_residual_max_m": 4.0585277684018674e-05,
+      "fit_residual_rms_m": 2.4319666490328505e-05
+    }
+  ],
+  "source_sha256": "371d7caba0b01c3f8373b6c5f6d963badddcefbd2079c7a24d424636face3efb"
+}

@@ -1,0 +1,51 @@
+{
+  "description": "Detailed visual reference; approximate forward-jaw split, not a physical disassembly model.",
+  "meshes": [
+    {
+      "file": "wrist_detailed.obj",
+      "role": "fixed",
+      "translation": [
+        -0.19557,
+        0,
+        0
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "jaw_extension_visual.obj",
+      "role": "lower_jaw",
+      "translation": [
+        -0.19557,
+        0,
+        0
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "finger_visual.obj",
+      "role": "finger",
+      "translation": [
+        -0.07812,
+        0,
+        0.01482
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  ],
+  "hole_display_offset_m": 0.001
+}

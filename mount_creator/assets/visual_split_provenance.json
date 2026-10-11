@@ -1,0 +1,20 @@
+{
+  "source": "spot_description/spot_description/meshes/arm/visual/arm_link_wr1.obj",
+  "source_sha256": "6f9e2a5d229fd1615a988a5e8bb8bc74ea96fb8605531fb3e923aa27b969ebef",
+  "frame": "arm_link_wr1",
+  "units": "m",
+  "hand_origin_in_wr1": [
+    0.19557,
+    0,
+    0
+  ],
+  "operation": "Clip source triangles by x = 0.146100 m; triangulate crossing polygons; add no cap.",
+  "boundary_evidence": "collision/arm_link_wr1.obj maximum x equals collision/middle_jaw.obj minimum x, both 0.146100 m.",
+  "limitation": "The visual mesh fuses the wrist and lower jaw. This separates the forward jaw extension for preview, not a verified physical disassembly surface. The rear lower wrap under the wrist remains. No screw holes are generated or certified.",
+  "output_files": [
+    "wrist_detailed.obj",
+    "jaw_extension_visual.obj"
+  ],
+  "source_area_m2": 0.09151217770497119,
+  "combined_output_area_m2": 0.0915121777049712
+}

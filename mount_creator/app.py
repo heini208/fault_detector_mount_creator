@@ -15,8 +15,9 @@ from PyQt5.QtWidgets import (
 )
 
 from .bundle import load_head, save_head
-from .document import Document, Part
+from .document import Part
 from .geometry import Pose, direction_pose, read_stl
+from .starter import new_starter_document
 from .viewport import Viewport
 
 
@@ -105,7 +106,7 @@ class FileTask(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.document = Document()
+        self.document = new_starter_document()
         self.dirty = False
         self.worker = None
         self.resize(1200, 800)
@@ -131,7 +132,10 @@ class MainWindow(QMainWindow):
 
         build = QWidget()
         build_layout = QVBoxLayout(build)
-        build_layout.addWidget(QLabel("Add parts, then set their dimensions and placement."))
+        instruction = QLabel("Move, extend or replace the starter mount.\n"
+                             "Box dimensions are editable; STL meshes keep their shape.")
+        instruction.setWordWrap(True)
+        build_layout.addWidget(instruction)
         row = QHBoxLayout()
         for title, action in (("Add box", self._add_box), ("Import STL…", self._import_stl)):
             button = QPushButton(title)
@@ -183,8 +187,14 @@ class MainWindow(QMainWindow):
         sensor_layout.addStretch()
         tabs.addTab(sensor, "2 · Sensor tip")
 
-        note = QLabel("Reference preview: stock lower-jaw parts are translucent.\n"
-                      "The physical replacement boundary is not verified yet.")
+        self.show_lower_jaw = QCheckBox("Show lower-jaw extension")
+        panel.addWidget(self.show_lower_jaw)
+        self.show_holes = QCheckBox("Highlight candidate mounting holes")
+        self.show_holes.setChecked(True)
+        panel.addWidget(self.show_holes)
+        note = QLabel("Orange rings mark unverified mounting-hole candidates.\n"
+                      "The lower-jaw split is a visual approximation.\n"
+                      "Starter alignment is model-derived; check mounting fit and tip.")
         note.setWordWrap(True)
         panel.addWidget(note)
         scroll = QScrollArea()
@@ -194,12 +204,15 @@ class MainWindow(QMainWindow):
         scroll.setMaximumWidth(480)
         self.viewport = Viewport()
         self.viewport.tip_picked.connect(self._tip_picked)
+        self.show_lower_jaw.toggled.connect(self.viewport.set_lower_jaw_visible)
+        self.show_holes.toggled.connect(self.viewport.set_holes_visible)
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.addWidget(scroll)
         layout.addWidget(self.viewport, 1)
         self.setCentralWidget(central)
         self._refresh()
+        self.viewport.reset_view()
         self.statusBar().showMessage("Orbit: left drag · Pan: middle drag · Zoom: wheel")
 
     def _selected_part(self):
@@ -318,7 +331,7 @@ class MainWindow(QMainWindow):
 
     def _new(self):
         if self._discard_changes():
-            self._replace_document(Document())
+            self._replace_document(new_starter_document())
 
     def _replace_document(self, document):
         self.document = document

@@ -10,7 +10,7 @@ from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData
 from vtkmodules.vtkCommonMath import vtkMatrix4x4
-from vtkmodules.vtkFiltersSources import vtkArrowSource, vtkSphereSource
+from vtkmodules.vtkFiltersSources import vtkArrowSource, vtkRegularPolygonSource, vtkSphereSource
 from vtkmodules.vtkInteractionStyle import vtkInteractorStyleTrackballCamera
 from vtkmodules.vtkIOGeometry import vtkOBJReader
 from vtkmodules.vtkRenderingAnnotation import vtkAxesActor
@@ -69,16 +69,40 @@ class Viewport(QVTKRenderWindowInteractor):
         self.picking = False
         self.AddObserver("LeftButtonPressEvent", self._pick)
 
-        reference = json.loads((ASSETS / "reference.json").read_text())
-        for item in reference["meshes"]:
+        # Visual detail is independent of the export's mounting-template identity.
+        preview = json.loads((ASSETS / "preview.json").read_text())
+        self.reference_actors = {"fixed": [], "lower_jaw": [], "finger": []}
+        for item in preview["meshes"]:
             reader = vtkOBJReader()
             reader.SetFileName(str(ASSETS / item["file"]))
             reader.Update()
-            jaw = item["role"] == "stock_jaw"
-            actor = mesh_actor(reader.GetOutput(), (0.70, 0.72, 0.75), 0.18 if jaw else 0.75)
+            color = (0.45, 0.52, 0.58) if item["role"] == "finger" else (0.70, 0.72, 0.75)
+            actor = mesh_actor(reader.GetOutput(), color)
             actor.SetUserMatrix(vtk_matrix(Pose(tuple(item["translation"]),
                                                tuple(item["quaternion"])).matrix()))
             actor.PickableOff()
+            actor.SetVisibility(item["role"] != "lower_jaw")
+            self.reference_actors[item["role"]].append(actor)
+            self.renderer.AddActor(actor)
+
+        candidates = json.loads((ASSETS / "mount_hole_candidates.json").read_text())
+        self.hole_markers = []
+        for hole in candidates["holes"]:
+            ring = vtkRegularPolygonSource()
+            ring.SetNumberOfSides(48)
+            ring.SetRadius(hole["radius_m"])
+            ring.SetNormal(*hole["axis_hand"])
+            # Lift the highlight, not the stored datum, slightly off the surface.
+            center = (np.array(hole["center_hand_m"])
+                      + preview["hole_display_offset_m"] * np.array(hole["axis_hand"]))
+            ring.SetCenter(*center)
+            ring.GeneratePolygonOff()
+            ring.Update()
+            actor = mesh_actor(ring.GetOutput(), (1.0, 0.5, 0.05))
+            actor.GetProperty().SetLineWidth(4)
+            actor.GetProperty().LightingOff()
+            actor.PickableOff()
+            self.hole_markers.append(actor)
             self.renderer.AddActor(actor)
 
         axes = vtkAxesActor()
@@ -86,8 +110,8 @@ class Viewport(QVTKRenderWindowInteractor):
         axes.PickableOff()
         self.renderer.AddActor(axes)
         camera = self.renderer.GetActiveCamera()
-        camera.SetPosition(0.4, -0.4, 0.3)
-        camera.SetFocalPoint(-0.08, 0, 0)
+        camera.SetPosition(0.35, -0.45, 0.18)
+        camera.SetFocalPoint(-0.08, 0, -0.01)
         camera.SetViewUp(0, 0, 1)
         self.renderer.ResetCamera()
 
@@ -131,6 +155,17 @@ class Viewport(QVTKRenderWindowInteractor):
 
     def reset_view(self):
         self.renderer.ResetCamera()
+        self.render()
+
+    def set_lower_jaw_visible(self, visible):
+        for actor in self.reference_actors["lower_jaw"]:
+            actor.SetVisibility(visible)
+        self.renderer.ResetCameraClippingRange()
+        self.render()
+
+    def set_holes_visible(self, visible):
+        for actor in self.hole_markers:
+            actor.SetVisibility(visible)
         self.render()
 
     def _pick(self, caller, event):

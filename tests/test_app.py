@@ -4,6 +4,7 @@ import os
 import tempfile
 import time
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -61,6 +62,7 @@ class EditorTests(unittest.TestCase):
         np.testing.assert_array_equal(self.window.document.collision_mesh(), before)
 
     def test_part_edits_and_whole_mount_have_separate_effects(self):
+        self.window._replace_document(Document())
         self.window._add_box()
         self.window._add_box()
         self.window._tip_at_origin()
@@ -77,6 +79,7 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(len(self.window.viewport.markers), 2)
 
     def test_background_export_then_reopen(self):
+        self.window._replace_document(Document())
         self.window._add_box()
         self.window._tip_at_origin()
         with tempfile.TemporaryDirectory() as directory:
@@ -92,6 +95,7 @@ class EditorTests(unittest.TestCase):
             self.assertIsNotNone(self.window.document.tip)
 
     def test_oversized_assembly_is_rejected_before_changing_scene(self):
+        self.window._replace_document(Document())
         with patch("mount_creator.document.MAX_PARTS", 1):
             self.window._add_box()
             with patch.object(QMessageBox, "warning") as warning:
@@ -99,6 +103,27 @@ class EditorTests(unittest.TestCase):
                 warning.assert_called_once()
         self.assertEqual(len(self.window.document.parts), 1)
         self.assertEqual(len(self.window.viewport.parts), 1)
+
+    def test_reference_toggles_do_not_change_export_or_tip_picking(self):
+        self.window._add_box()
+        self.window._tip_at_origin()
+        viewport = self.window.viewport
+        self.assertEqual(len(viewport.hole_markers), 4)
+        self.assertTrue(all(not actor.GetVisibility() for actor in viewport.reference_actors["lower_jaw"]))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "head.sensorhead"
+            save_head(path, self.window.document)
+            with zipfile.ZipFile(path) as archive:
+                before = {name: archive.read(name) for name in archive.namelist()}
+            self.window.show_lower_jaw.setChecked(True)
+            self.window.show_holes.setChecked(False)
+            self.assertTrue(all(actor.GetVisibility() for actor in viewport.reference_actors["lower_jaw"]))
+            self.assertTrue(all(not actor.GetVisibility() for actor in viewport.hole_markers))
+            self.assertTrue(all(not actor.GetPickable() for actor in viewport.hole_markers))
+            save_head(path, self.window.document)
+            with zipfile.ZipFile(path) as archive:
+                after = {name: archive.read(name) for name in archive.namelist()}
+            self.assertEqual(before, after)
 
     def test_failed_open_keeps_document_and_unsaved_state(self):
         self.window._add_box()
@@ -113,6 +138,35 @@ class EditorTests(unittest.TestCase):
         self.assertIs(self.window.document, document)
         self.assertTrue(self.window.dirty)
         self.assertTrue(self.window.isEnabled())
+
+    def test_starter_is_removable_and_new_restores_it_without_a_tip(self):
+        original = self.window.document
+        mesh = original.parts[0].mesh.copy()
+        self.assertEqual(len(original.parts), 1)
+        self.assertEqual(original.parts[0].kind, "mesh")
+        self.assertIsNone(original.tip)
+        self.assertFalse(self.window.dimensions.isEnabled())
+        self.assertTrue(self.window.part_pose.isEnabled())
+        self.window.part_pose.position.fields[0].setValue(25)
+        self.assertEqual(original.parts[0].pose.translation, (0.025, 0, 0))
+        self.window._tip_at_origin()
+        self.window._remove_part()
+        self.assertEqual(self.window.document.parts, [])
+        self.assertEqual(len(self.window.viewport.parts), 0)
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Discard):
+            self.window._new()
+        restored = self.window.document
+        self.assertIsNot(restored, original)
+        self.assertEqual(len(restored.parts), 1)
+        self.assertEqual(restored.parts[0].pose, Pose())
+        np.testing.assert_array_equal(restored.parts[0].mesh, mesh)
+        self.assertEqual(restored.placement, original.placement)
+        self.assertIsNone(restored.tip)
+        self.assertFalse(self.window.tip_pose.isEnabled())
+        self.assertFalse(self.window.dirty)
+        with patch.object(QMessageBox, "information") as information:
+            self.window._export()
+            information.assert_called_once()
 
     def _finish_worker(self):
         deadline = time.monotonic() + 10
