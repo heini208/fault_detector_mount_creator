@@ -1,0 +1,168 @@
+{
+  "id": "spot-hand-reference-v1",
+  "revision": 1,
+  "fingerprint": "a5746b4090dafe81c140c62d69be15dc682d5835d5384c6bbda8592e53391f46",
+  "verified": false,
+  "meshes": [
+    {
+      "file": "arm_link_wr1.obj",
+      "name": "arm_link_wr1",
+      "translation": [
+        -0.19557,
+        0,
+        0
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "fixed"
+    },
+    {
+      "file": "front_jaw.obj",
+      "name": "front_jaw",
+      "translation": [
+        -0.19557,
+        0,
+        0
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "stock_jaw"
+    },
+    {
+      "file": "middle_jaw.obj",
+      "name": "middle_jaw",
+      "translation": [
+        -0.19557,
+        0,
+        0
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "stock_jaw"
+    },
+    {
+      "file": "jaw_tooth.obj",
+      "name": "jaw_tooth",
+      "translation": [
+        -0.19557,
+        0,
+        0
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "stock_jaw"
+    },
+    {
+      "file": "left_hinge.obj",
+      "name": "left_hinge",
+      "translation": [
+        -0.07812,
+        0,
+        0.01482
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "finger"
+    },
+    {
+      "file": "left_finger.obj",
+      "name": "left_finger",
+      "translation": [
+        -0.07812,
+        0,
+        0.01482
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "finger"
+    },
+    {
+      "file": "left_tooth.obj",
+      "name": "left_tooth",
+      "translation": [
+        -0.07812,
+        0,
+        0.01482
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "finger"
+    },
+    {
+      "file": "right_hinge.obj",
+      "name": "right_hinge",
+      "translation": [
+        -0.07812,
+        0,
+        0.01482
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "finger"
+    },
+    {
+      "file": "right_finger.obj",
+      "name": "right_finger",
+      "translation": [
+        -0.07812,
+        0,
+        0.01482
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "finger"
+    },
+    {
+      "file": "right_tooth.obj",
+      "name": "right_tooth",
+      "translation": [
+        -0.07812,
+        0,
+        0.01482
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "role": "finger"
+    }
+  ]
+}

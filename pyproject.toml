@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fault-detector-mount-creator"
+version = "0.1.0"
+description = "An offline editor for Spot sensor mounts"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.21,<3", "PyQt5>=5.15,<6", "vtk>=9.1,<10"]
+
+[project.scripts]
+mount-creator = "mount_creator.app:main"
+
+[tool.setuptools.packages.find]
+include = ["mount_creator*"]
+
+[tool.setuptools.package-data]
+mount_creator = ["assets/*"]
