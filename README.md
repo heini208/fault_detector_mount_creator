@@ -21,7 +21,8 @@ mount-creator
 ```
 
 If the dependencies are already installed, `python3 main.py` also works. The
-desktop application needs a working graphical display and OpenGL. Development
+desktop application needs a working graphical display and OpenGL. Press Ctrl+C
+in its launch terminal to exit immediately, discarding unexported changes. Development
 checks use Python 3.10, NumPy 1.21, PyQt5 5.15, and VTK 9.1.
 
 ## First workflow

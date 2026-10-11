@@ -1,5 +1,6 @@
 """A small Qt editor. UI values use millimetres and degrees; the model uses SI."""
 
+import signal
 import sys
 import traceback
 from functools import partial
@@ -405,6 +406,8 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    # Let the OS stop the process even while Qt is waiting in its event loop.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     application = QApplication(sys.argv)
     window = MainWindow()
     window.show()
