@@ -59,9 +59,12 @@ def mesh_actor(data, color, opacity=1.0):
     return actor
 
 
-def axes_actor(length):
+def axes_actor(length, frame_name=""):
     actor = vtkAxesActor()
     actor.SetTotalLength(length, length, length)
+    actor.SetXAxisLabelText(f"{frame_name} X".strip())
+    actor.SetYAxisLabelText(f"{frame_name} Y".strip())
+    actor.SetZAxisLabelText(f"{frame_name} Z".strip())
     for caption in (actor.GetXAxisCaptionActor2D(), actor.GetYAxisCaptionActor2D(),
                     actor.GetZAxisCaptionActor2D()):
         # Keep labels small instead of scaling them with the viewport.
@@ -124,8 +127,8 @@ class Viewport(QVTKRenderWindowInteractor):
             self.hole_markers.append(actor)
             self.renderer.AddActor(actor)
 
-        axes = axes_actor(0.04)
-        self.renderer.AddActor(axes)
+        self.edit_axes = axes_actor(0.04, "Hand")
+        self.renderer.AddActor(self.edit_axes)
         camera = self.renderer.GetActiveCamera()
         camera.SetPosition(0.35, -0.45, 0.18)
         camera.SetFocalPoint(-0.08, 0, -0.01)
@@ -174,6 +177,14 @@ class Viewport(QVTKRenderWindowInteractor):
         self.renderer.ResetCamera()
         self.render()
 
+    def set_edit_frame(self, frame: Pose, frame_name: str):
+        """Show the coordinate frame used by the active editing controls."""
+        self.edit_axes.SetUserMatrix(vtk_matrix(frame.matrix()))
+        self.edit_axes.SetXAxisLabelText(f"{frame_name} X".strip())
+        self.edit_axes.SetYAxisLabelText(f"{frame_name} Y".strip())
+        self.edit_axes.SetZAxisLabelText(f"{frame_name} Z".strip())
+        self.render()
+
     def set_lower_jaw_visible(self, visible):
         for actor in self.reference_actors["lower_jaw"]:
             actor.SetVisibility(visible)
@@ -196,6 +207,7 @@ class Viewport(QVTKRenderWindowInteractor):
         for actor in self.measurement_actors:
             self.renderer.RemoveActor(actor)
         self.measurement_actors = []
+        self.edit_axes.SetVisibility(True)
         if 0 <= part_index < len(self.parts):
             self._highlight_surface(self.parts[part_index], cell_id)
         if frame is not None and point is not None and normal is not None and tip is not None:
@@ -204,9 +216,10 @@ class Viewport(QVTKRenderWindowInteractor):
             base = tip.copy()
             base[axis] -= distance
             self._measurement_point(frame.apply(base), (0.95, 0.95, 0.35))
-            axes = axes_actor(0.015)
+            axes = axes_actor(0.015, "Part")
             axes.SetUserMatrix(vtk_matrix(frame.compose(Pose(base)).matrix()))
             self._add_measurement_actor(axes)
+            self.edit_axes.SetVisibility(False)
             colors = ((1.0, 0.35, 0.35), (0.4, 0.9, 0.4), (0.35, 0.65, 1.0))
             self._measurement_segment(frame.apply(base), frame.apply(tip),
                                       f"{'XYZ'[axis]} {distance * 1000:+.3f} mm", colors[axis])

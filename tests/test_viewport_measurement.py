@@ -1,7 +1,10 @@
 """Check surface measurements and picking without an OpenGL context."""
 
 import os
+import tempfile
 import unittest
+import zipfile
+from pathlib import Path
 from unittest.mock import patch
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -13,6 +16,7 @@ from vtkmodules.vtkRenderingAnnotation import vtkAxesActor
 from vtkmodules.vtkRenderingCore import vtkActor, vtkBillboardTextActor3D
 from vtkmodules.vtkRenderingOpenGL2 import vtkGenericOpenGLRenderWindow
 
+from mount_creator.bundle import save_head
 from mount_creator.document import Document, Part
 from mount_creator.geometry import Pose, box_mesh
 from mount_creator.viewport import Viewport
@@ -36,6 +40,35 @@ class SurfaceViewportTests(unittest.TestCase):
         self.viewport.close()
         self.viewport.deleteLater()
         self.application.processEvents()
+
+    def test_edit_axes_follow_named_frame_without_changing_document_or_export(self):
+        self.document.tip = Pose((0.01, 0.02, 0.03))
+        mesh_before = self.document.collision_mesh().copy()
+        tip_before = self.document.hand_to_probe()
+        axes = self.viewport.edit_axes
+        frames = (("Hand", Pose()), ("Mount", self.document.placement),
+                  ("Part", self.document.placement.compose(self.part.pose)))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "head.sensorhead"
+            save_head(path, self.document)
+            with zipfile.ZipFile(path) as archive:
+                before = {name: archive.read(name) for name in archive.namelist()}
+            for name, frame in frames:
+                with self.subTest(frame=name):
+                    self.viewport.set_edit_frame(frame, name)
+                    actual = np.array([[axes.GetMatrix().GetElement(row, column)
+                                        for column in range(4)] for row in range(4)])
+                    np.testing.assert_allclose(actual, frame.matrix(), atol=1e-12)
+                    self.assertEqual((axes.GetXAxisLabelText(), axes.GetYAxisLabelText(),
+                                      axes.GetZAxisLabelText()),
+                                     tuple(f"{name} {axis}" for axis in "XYZ"))
+                    self.assertTrue(axes.GetVisibility())
+                    self.assertFalse(axes.GetPickable())
+            save_head(path, self.document)
+            with zipfile.ZipFile(path) as archive:
+                self.assertEqual(before, {name: archive.read(name) for name in archive.namelist()})
+        np.testing.assert_array_equal(self.document.collision_mesh(), mesh_before)
+        self.assertEqual(self.document.hand_to_probe(), tip_before)
 
     def test_surface_pick_uses_exact_triangle_and_both_part_and_mount_transforms(self):
         results = []
@@ -105,6 +138,7 @@ class SurfaceViewportTests(unittest.TestCase):
 
     def test_highlight_covers_coplanar_face_and_retains_actor_transform(self):
         self.viewport.set_surface_measurement(0, 0)
+        self.assertTrue(self.viewport.edit_axes.GetVisibility())
         overlay, = self.viewport.measurement_actors
         data = overlay.GetMapper().GetInput()
         self.assertEqual(data.GetNumberOfCells(), 2)
@@ -138,6 +172,11 @@ class SurfaceViewportTests(unittest.TestCase):
         actual_axes = [[axes.GetMatrix().GetElement(row, col) for col in range(4)]
                        for row in range(4)]
         np.testing.assert_allclose(actual_axes, expected_axes, atol=1e-12)
+        self.assertEqual((axes.GetXAxisLabelText(), axes.GetYAxisLabelText(),
+                          axes.GetZAxisLabelText()), ("Part X", "Part Y", "Part Z"))
+        self.assertFalse(self.viewport.edit_axes.GetVisibility())
+        self.viewport.set_edit_frame(Pose(), "Hand")
+        self.assertFalse(self.viewport.edit_axes.GetVisibility())
         labels = [actor.GetInput() for actor in actors
                   if isinstance(actor, vtkBillboardTextActor3D)]
         self.assertEqual(labels, ["X -24.142 mm"])
@@ -149,6 +188,9 @@ class SurfaceViewportTests(unittest.TestCase):
         np.testing.assert_array_equal(self.document.collision_mesh(), before)
         self.assertEqual(self.document.tip, tip_before)
         self.assertTrue(all(not actor.GetPickable() for actor in actors))
+        self.viewport.set_surface_measurement()
+        self.assertTrue(self.viewport.edit_axes.GetVisibility())
+        self.assertFalse(self.viewport.renderer.HasViewProp(axes))
 
     def test_zero_distance_has_a_label_without_a_degenerate_line(self):
         self.viewport.set_surface_measurement(0, 0, Pose(), (0, 0, 0), (0, 0, 1),

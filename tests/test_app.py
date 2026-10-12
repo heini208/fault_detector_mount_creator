@@ -48,6 +48,57 @@ class EditorTests(unittest.TestCase):
         self.assertAlmostEqual(self.window.document.placement.translation[0], pose.translation[0], places=12)
         self.assertAlmostEqual(self.window.document.placement.translation[1], 0.012)
 
+    def test_starter_part_translation_follows_each_displayed_mount_arrow(self):
+        axes = self.window.viewport.edit_axes
+        self.assertEqual(axes.GetYAxisLabelText(), "Mount Y")
+        rotation = self.window.document.placement.matrix()[:3, :3]
+        self.assertGreater(rotation[2, 1], 0.99)  # Starter Y is vertical.
+        self.assertLess(rotation[1, 2], -0.99)  # Starter Z is sideways.
+        for axis, field in enumerate(self.window.part_pose.position.fields):
+            before = self.window.document.placement.apply(self.window.document.parts[0].pose.translation)
+            field.setValue(field.value() + 10)
+            after = self.window.document.placement.apply(self.window.document.parts[0].pose.translation)
+            direction = np.array([axes.GetMatrix().GetElement(row, axis) for row in range(3)])
+            np.testing.assert_allclose(after - before, direction * 0.01, atol=1e-12)
+            self.assertEqual(axes.GetXAxisLabelText(), "Mount X")
+
+    def test_whole_mount_translation_uses_hand_arrows_after_rotated_part_edit(self):
+        self.window.part_pose.position.fields[1].setValue(10)
+        for axis, field in enumerate(self.window.mount_pose.position.fields):
+            before = np.array(self.window.document.placement.translation)
+            field.setValue(field.value() + 5)
+            after = np.array(self.window.document.placement.translation)
+            axes = self.window.viewport.edit_axes
+            direction = np.array([axes.GetMatrix().GetElement(row, axis) for row in range(3)])
+            edited_distance = field.value() / 1000 - before[axis]
+            np.testing.assert_allclose(after - before, direction * edited_distance, atol=1e-12)
+            self.assertEqual(axes.GetZAxisLabelText(), "Hand Z")
+
+    def test_focus_selects_axes_without_changing_export_and_sizes_use_part_rotation(self):
+        placement = Pose.from_rpy((0.1, 0.2, 0.3), (0.3, -0.7, 0.5))
+        part = Part("Box", pose=Pose.from_rpy((0.02, -0.01, 0), (0.5, 0.2, -0.9)))
+        self.window._replace_document(Document(parts=[part], placement=placement, tip=Pose()))
+        with tempfile.TemporaryDirectory() as folder:
+            before_path = Path(folder) / "before.sensorhead"
+            after_path = Path(folder) / "after.sensorhead"
+            save_head(before_path, self.window.document)
+            for control, expected, name in (
+                (self.window.part_pose.position, placement, "Mount"),
+                (self.window.mount_pose.position, Pose(), "Hand"),
+                (self.window.dimensions, placement.compose(part.pose), "Part"),
+            ):
+                self.window._focus_changed(None, control.fields[1])
+                axes = self.window.viewport.edit_axes
+                actual = [[axes.GetMatrix().GetElement(row, col) for col in range(4)]
+                          for row in range(4)]
+                np.testing.assert_allclose(actual, expected.matrix(), atol=1e-12)
+                self.assertEqual(axes.GetXAxisLabelText(), f"{name} X")
+                self.assertFalse(self.window.dirty)
+            save_head(after_path, self.window.document)
+            with zipfile.ZipFile(before_path) as before, zipfile.ZipFile(after_path) as after:
+                for name in before.namelist():
+                    self.assertEqual(before.read(name), after.read(name))
+
     def test_rotated_mount_pick_sets_local_tip_and_correct_world_direction(self):
         placement = Pose.from_rpy((0.2, -0.1, 0.3), (0.2, 0.3, 0.8))
         self.window._replace_document(Document(parts=[Part("Box")], placement=placement))

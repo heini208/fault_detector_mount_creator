@@ -52,6 +52,13 @@ changing the assembly. Length controls use millimetres; file coordinates use
 metres. Rotations in the UI use roll/pitch/yaw degrees; exported poses use xyzw
 quaternions.
 
+The preview arrows follow the controls being edited. **Mount X/Y/Z** match
+selected-part positions, **Hand X/Y/Z** match whole-mount positions, and
+**Part X/Y/Z** match selected-part sizes. Click a field to show its coordinate
+frame. For the starter mount, Mount Y points up and Mount Z sideways; Hand Z
+points up because the mount's original STL axes are rotated relative to the hand.
+The Sensor tip tab shows the reference part's axes while measuring a surface.
+
 ## Position a tip from physical measurements
 
 1. In **Sensor tip**, choose **Pick sensor tip on mount** and click its initial

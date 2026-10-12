@@ -116,6 +116,7 @@ class MainWindow(QMainWindow):
         self.reference_point = None
         self.reference_normal = None
         self.reference_cell = -1
+        self._axis_frame = "mount"
         self.dirty = False
         self.worker = None
         self.resize(1200, 800)
@@ -137,6 +138,7 @@ class MainWindow(QMainWindow):
         self.name.textEdited.connect(self._rename)
         panel.addWidget(self.name)
         tabs = QTabWidget()
+        self.tabs = tabs
         panel.addWidget(tabs)
 
         build = QWidget()
@@ -255,6 +257,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(scroll)
         layout.addWidget(self.viewport, 1)
         self.setCentralWidget(central)
+        tabs.currentChanged.connect(self._show_measurement)
+        QApplication.instance().focusChanged.connect(self._focus_changed)
         self._refresh()
         self.viewport.reset_view()
         self.statusBar().showMessage("Orbit: left drag · Pan: middle drag · Zoom: wheel")
@@ -262,6 +266,24 @@ class MainWindow(QMainWindow):
     def _selected_part(self):
         index = self.part_list.currentRow()
         return self.document.parts[index] if 0 <= index < len(self.document.parts) else None
+
+    def _focus_changed(self, _previous, current):
+        for control, frame in ((self.mount_pose, "hand"), (self.part_pose, "mount"),
+                               (self.dimensions, "part")):
+            if current is control or (current is not None and control.isAncestorOf(current)):
+                self._axis_frame = frame
+                self._show_measurement()
+                return
+
+    def _show_edit_axes(self):
+        part = self._selected_part()
+        if self._axis_frame == "hand" or part is None:
+            frame, name = Pose(), "Hand"
+        elif self._axis_frame == "part":
+            frame, name = self.document.placement.compose(part.pose), "Part"
+        else:
+            frame, name = self.document.placement, "Mount"
+        self.viewport.set_edit_frame(frame, name)
 
     def _refresh(self):
         index = self.part_list.currentRow()
@@ -274,6 +296,7 @@ class MainWindow(QMainWindow):
         self._select_part()
 
     def _select_part(self, index=None):
+        self._axis_frame = "mount"
         part = self._selected_part()
         if self.reference_part is not None and not any(
                 item is self.reference_part for item in self.document.parts):
@@ -320,6 +343,7 @@ class MainWindow(QMainWindow):
     def _resize_box(self):
         part = self._selected_part()
         if part is not None and part.kind == "box":
+            self._axis_frame = "part"
             self._clear_measurement()
             part.dimensions = tuple(np.array(self.dimensions.values()) / 1000)
             self._changed()
@@ -327,11 +351,13 @@ class MainWindow(QMainWindow):
     def _move_part(self):
         part = self._selected_part()
         if part is not None:
+            self._axis_frame = "mount"
             self._clear_measurement()
             part.pose = self.part_pose.pose()
             self._changed()
 
     def _move_mount(self):
+        self._axis_frame = "hand"
         self.document.placement = self.mount_pose.pose()
         self._changed()
 
@@ -377,6 +403,7 @@ class MainWindow(QMainWindow):
         self._show_measurement()
 
     def _show_measurement(self):
+        self._show_edit_axes()
         has_tip = self.document.tip is not None
         self.reference_button.setEnabled(has_tip and bool(self.document.parts))
         enabled = has_tip and self.reference_part is not None
@@ -408,8 +435,11 @@ class MainWindow(QMainWindow):
         part_index = next(index for index, part in enumerate(self.document.parts)
                           if part is self.reference_part)
         frame = self.document.placement.compose(self.reference_part.pose)
-        self.viewport.set_surface_measurement(part_index, self.reference_cell, frame,
-                                              self.reference_point, self.reference_normal, tip, axis)
+        if self.tabs.currentIndex() == 1:
+            self.viewport.set_surface_measurement(part_index, self.reference_cell, frame,
+                                                  self.reference_point, self.reference_normal, tip, axis)
+        else:
+            self.viewport.set_surface_measurement()
 
     def _edit_surface_distance(self, millimetres):
         if self.reference_part is None or self.document.tip is None:

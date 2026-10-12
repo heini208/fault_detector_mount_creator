@@ -29,6 +29,7 @@ class MeasurementTests(unittest.TestCase):
     def setUp(self):
         with patch.object(qt_vtk, "vtkRenderWindow", vtkGenericOpenGLRenderWindow):
             self.window = MainWindow()
+        self.window.tabs.setCurrentIndex(1)
         self.part_pose = Pose.from_rpy((0.03, -0.012, 0.023), (0.4, -0.3, 0.7))
         self.placement = Pose.from_rpy((-0.11, 0.02, 0.01), (-0.2, 0.5, -0.9))
         self.local_tip = np.array((0.01, 0.02, 0.03))
@@ -61,6 +62,21 @@ class MeasurementTests(unittest.TestCase):
         tip = self.window.reference_part.pose.inverse().apply(self.window.document.tip.translation)
         return surface_axis_distance(self.window.reference_point, self.window.reference_normal,
                                      tip, self.window.measure_axis.currentIndex())
+
+    def test_tabs_show_only_the_axes_for_building_or_surface_measurement(self):
+        self._pick_surface()
+        before = self.window.document.hand_to_probe().matrix().copy()
+        self.assertFalse(self.window.viewport.edit_axes.GetVisibility())
+        self.window.tabs.setCurrentIndex(0)
+        self.assertTrue(self.window.viewport.edit_axes.GetVisibility())
+        self.assertEqual(self.window.viewport.measurement_actors, [])
+        self.window.tabs.setCurrentIndex(1)
+        self.assertFalse(self.window.viewport.edit_axes.GetVisibility())
+        axes, = [actor for actor in self.window.viewport.measurement_actors
+                 if isinstance(actor, vtkAxesActor)]
+        self.assertEqual(axes.GetYAxisLabelText(), "Part Y")
+        np.testing.assert_array_equal(self.window.document.hand_to_probe().matrix(), before)
+        self.assertFalse(self.window.dirty)
 
     def test_pick_tip_first_then_reference_on_any_part_without_build_selection(self):
         self._load_document(with_tip=False)
